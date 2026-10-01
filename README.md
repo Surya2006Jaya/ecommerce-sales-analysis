@@ -177,30 +177,24 @@ FROM Monthly_Agg;
 
 ## 11. Interactive Streamlit Dashboard
 
-The Streamlit web application (`dashboard/app.py`) provides an interactive interface for executive decision-makers.
+The Streamlit web application (`dashboard/app.py`) provides a complete, 10-section interactive executive command center.
+
+![Dashboard Preview](outputs/dashboard_screenshots/dashboard_overview.png)
 
 ### Key Dashboard Capabilities:
 - **Global Multi-Filters:** Filter dynamically by Date Range, Region, Product Category, Sub-Category, Customer Segment, and Order Status.
-- **Dynamic KPI Ribbon:** Real-time recalculation of Revenue, Profit, Margin %, Orders, Customers, and AOV.
-- **5 Multi-Dimensional Tabs:**
-  1. 📈 **Executive Overview:** Trajectory curves and high-level category distribution.
-  2. 📦 **Product Performance:** Category margin tables, top 10 products, and discount band impact.
-  3. 👥 **Customer Insights:** VIP tables, segment donut charts, and repeat buyer value multipliers.
-  4. 🗺️ **Regional Performance:** Regional comparisons and city-level sales rankings.
-  5. 💡 **Business Insights & Scenario Target:** Automated insight cards and real-time interactive scenario modeling sliders.
-
-```
-+-----------------------------------------------------------------------------------+
-|  [Filters]  |  REVENUE: $1.02M  |  PROFIT: $475.9K  |  MARGIN: 46.7%  |  ORDERS: 11.5K|
-+-----------------------------------------------------------------------------------+
-|  [Tab 1: Overview] [Tab 2: Products] [Tab 3: Customers] [Tab 4: Regions] [Tab 5] |
-|                                                                                   |
-|  +---------------------------------------+  +-----------------------------------+ |
-|  |  Monthly Revenue & Profit Trajectory  |  |  Revenue by Product Category      | |
-|  |  [~~~~~~~~~ Line / Bar Chart ~~~~~~~] |  |  [======= Horizontal Bar =======]| |
-|  +---------------------------------------+  +-----------------------------------+ |
-+-----------------------------------------------------------------------------------+
-```
+- **Dynamic KPI Cards:** Real-time recalculation of Revenue ($1.02M), Profit ($475.9K), Margin % (46.7%), Orders (11,482), Customers (1,286), and AOV ($88.74).
+- **10 Dedicated Multi-Dimensional Tabs:**
+  1. 📈 **Executive Overview:** Monthly Revenue & Profit trends, category revenue and profit distributions.
+  2. 📦 **Product & Sales Performance:** Category margin tables, Top 10 revenue products, Bottom 10 margin risk items, units sold, and discount band impact.
+  3. 👥 **Customer Insights:** RFM segment donut charts, Top 10 VIP spenders, repeat vs. one-time buyer analysis.
+  4. 🗺️ **Regional Performance:** Regional revenue & profit comparison, profit margins, and city-level sales tables (without artificial GPS coordinates).
+  5. ⏳ **Time & Seasonal Analysis:** Dynamic detection of peak & trough revenue/profit months and quarterly performance tables.
+  6. 📊 **Pareto Analysis:** Category cumulative profit curve with 80% reference threshold.
+  7. 💡 **Key Business Insights:** Automatically calculated finding, evidence, and commercial impact statements.
+  8. 📋 **Business Recommendations:** Practical, data-backed operational initiatives.
+  9. 🎯 **Profit Improvement Target (+15%):** Baseline vs. target margin metrics with interactive sensitivity sliders for markdown discipline and supplier COGS.
+  10. 🔍 **Data Explorer & Downloads:** Expandable transaction data viewer with 5 one-click CSV export buttons.
 
 ---
 

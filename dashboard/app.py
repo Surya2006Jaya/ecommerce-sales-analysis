@@ -2,470 +2,494 @@
 Interactive Streamlit Dashboard
 -------------------------------
 E-Commerce Sales Performance & Customer Insights
-Provides interactive filtering, dynamic KPI calculations, multi-section analytical deep-dives,
-and scenario simulation for executive decision-making.
+Interactive analysis of sales, profitability, customers, products and regional performance.
 """
 
 import os
-import sqlite3
+import io
 import pandas as pd
 import numpy as np
 import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 
-# Configure page settings
+# -------------------------------------------------------------
+# 1. STREAMLIT CONFIGURATION & CUSTOM AESTHETICS
+# -------------------------------------------------------------
 st.set_page_config(
-    page_title="E-Commerce Sales & Customer Insights",
+    page_title="E-Commerce Sales Performance & Customer Insights",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS for Modern, Premium Data Analytics Interface
+# Custom CSS for Modern, Premium Corporate Analytics Interface
 st.markdown("""
 <style>
     /* Metric Cards Styling */
     .metric-card {
         background: linear-gradient(135deg, #1E293B 0%, #0F172A 100%);
-        border: 1px solid rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 12px;
-        padding: 18px 20px;
+        padding: 16px 18px;
         color: #F8FAFC;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
         margin-bottom: 12px;
+        transition: transform 0.2s ease;
+    }
+    .metric-card:hover {
+        transform: translateY(-2px);
     }
     .metric-label {
-        font-size: 0.85rem;
+        font-size: 0.82rem;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
+        letter-spacing: 0.06em;
         color: #94A3B8;
-        margin-bottom: 6px;
+        margin-bottom: 4px;
     }
     .metric-value {
-        font-size: 1.75rem;
+        font-size: 1.65rem;
         font-weight: 700;
         color: #FFFFFF;
+        letter-spacing: -0.02em;
     }
-    .metric-delta {
-        font-size: 0.8rem;
+    .metric-sub {
+        font-size: 0.78rem;
         margin-top: 4px;
         color: #10B981;
+        font-weight: 500;
     }
     
     /* Section Headers */
-    .section-title {
-        font-size: 1.35rem;
+    .section-header {
+        font-size: 1.3rem;
         font-weight: 700;
-        color: #1E293B;
-        border-bottom: 2px solid #3B82F6;
+        color: #0F172A;
+        border-bottom: 2px solid #2563EB;
         padding-bottom: 6px;
-        margin-top: 24px;
-        margin-bottom: 18px;
+        margin-top: 20px;
+        margin-bottom: 16px;
     }
     
     /* Insight Callouts */
-    .insight-box {
-        background-color: #F0F9FF;
-        border-left: 4px solid #0284C7;
+    .insight-card {
+        background-color: #F8FAFC;
+        border-left: 4px solid #2563EB;
         padding: 16px;
         border-radius: 0 8px 8px 0;
         margin-bottom: 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .insight-title {
         font-weight: 700;
-        color: #0369A1;
-        font-size: 1rem;
-        margin-bottom: 4px;
+        color: #1E3A8A;
+        font-size: 0.98rem;
+        margin-bottom: 6px;
     }
     .insight-body {
-        font-size: 0.92rem;
+        font-size: 0.9rem;
         color: #334155;
-        line-height: 1.5;
+        line-height: 1.55;
     }
     
-    /* Hide Streamlit Default Header Padding */
+    /* Recommendation Card */
+    .rec-card {
+        background-color: #F0FDF4;
+        border-left: 4px solid #16A34A;
+        padding: 16px;
+        border-radius: 0 8px 8px 0;
+        margin-bottom: 14px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .rec-title {
+        font-weight: 700;
+        color: #15803D;
+        font-size: 0.98rem;
+        margin-bottom: 6px;
+    }
+    
+    /* Container adjustment */
     .block-container {
-        padding-top: 1.8rem;
-        padding-bottom: 2rem;
+        padding-top: 1.5rem;
+        padding-bottom: 2.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Helper function to locate dataset regardless of working directory
+# -------------------------------------------------------------
+# 2. DATA INGESTION & ROBUST PATH RESOLUTION
+# -------------------------------------------------------------
 @st.cache_data
-def load_data():
+def load_and_preprocess_data():
     possible_paths = [
         "ecommerce-sales-analysis/data/cleaned/ecommerce_sales_cleaned.csv",
         "data/cleaned/ecommerce_sales_cleaned.csv",
         "../data/cleaned/ecommerce_sales_cleaned.csv",
         os.path.join(os.path.dirname(__file__), "..", "data", "cleaned", "ecommerce_sales_cleaned.csv")
     ]
+    df = None
     for p in possible_paths:
         if os.path.exists(p):
             df = pd.read_csv(p)
-            df["Order_Date"] = pd.to_datetime(df["Order_Date"])
-            return df
-    raise FileNotFoundError("Cleaned dataset not found. Please run clean_and_analyze.py first.")
+            break
+            
+    if df is None:
+        raise FileNotFoundError("Could not locate ecommerce_sales_cleaned.csv. Please ensure clean_and_analyze.py has run.")
+        
+    df["Order_Date"] = pd.to_datetime(df["Order_Date"])
+    return df
 
 try:
-    df = load_data()
-except Exception as e:
-    st.error(f"Error loading dataset: {e}")
+    df_master = load_and_preprocess_data()
+except Exception as err:
+    st.error(f"Dataset Loading Error: {err}")
     st.stop()
 
 # -------------------------------------------------------------
-# SIDEBAR FILTERS
+# 3. SIDEBAR CONTROLS & INTERACTIVE FILTERS
 # -------------------------------------------------------------
-st.sidebar.image("https://img.icons8.com/fluency/96/analytics.png", width=64)
-st.sidebar.title("Analytics Filters")
-st.sidebar.markdown("Filter transactions dynamically:")
+st.sidebar.markdown("## 🔍 Analytics Controls")
+st.sidebar.markdown("Filter all visual components dynamically:")
 
 # 1. Date Range
-min_date = df["Order_Date"].dt.date.min()
-max_date = df["Order_Date"].dt.date.max()
-date_range = st.sidebar.date_input("Order Date Range", [min_date, max_date], min_value=min_date, max_value=max_date)
+min_d = df_master["Order_Date"].dt.date.min()
+max_d = df_master["Order_Date"].dt.date.max()
+selected_dates = st.sidebar.date_input(
+    "Select Date Range",
+    value=[min_d, max_d],
+    min_value=min_d,
+    max_value=max_d
+)
 
 # 2. Region
-all_regions = sorted(df["Region"].dropna().unique().tolist())
+all_regions = sorted(df_master["Region"].dropna().unique().tolist())
 selected_regions = st.sidebar.multiselect("Region", options=all_regions, default=all_regions)
 
 # 3. Product Category
-all_cats = sorted(df["Product_Category"].dropna().unique().tolist())
+all_cats = sorted(df_master["Product_Category"].dropna().unique().tolist())
 selected_cats = st.sidebar.multiselect("Product Category", options=all_cats, default=all_cats)
 
-# 4. Sub-Category (Dynamic based on category selection)
-available_subs = sorted(df[df["Product_Category"].isin(selected_cats)]["Sub_Category"].dropna().unique().tolist())
-selected_subs = st.sidebar.multiselect("Sub-Category", options=available_subs, default=available_subs)
+# 4. Sub-Category (Filtered dynamically by selected Category)
+filtered_sub_opts = sorted(df_master[df_master["Product_Category"].isin(selected_cats)]["Sub_Category"].dropna().unique().tolist())
+selected_subs = st.sidebar.multiselect("Sub-Category", options=filtered_sub_opts, default=filtered_sub_opts)
 
 # 5. Customer Segment
 all_segs = ["High Value", "Medium Value", "Low Value"]
 selected_segs = st.sidebar.multiselect("Customer Segment", options=all_segs, default=all_segs)
 
 # 6. Order Status
-all_statuses = sorted(df["Order_Status"].dropna().unique().tolist())
+all_statuses = sorted(df_master["Order_Status"].dropna().unique().tolist())
 selected_statuses = st.sidebar.multiselect("Order Status", options=all_statuses, default=all_statuses)
 
-# Filter Dataframe
-if len(date_range) == 2:
-    start_d, end_d = date_range
-    filtered_df = df[
-        (df["Order_Date"].dt.date >= start_d) &
-        (df["Order_Date"].dt.date <= end_d) &
-        (df["Region"].isin(selected_regions)) &
-        (df["Product_Category"].isin(selected_cats)) &
-        (df["Sub_Category"].isin(selected_subs)) &
-        (df["Customer_Segment"].isin(selected_segs)) &
-        (df["Order_Status"].isin(selected_statuses))
+# Filter Dataset Slice
+if len(selected_dates) == 2:
+    d_start, d_end = selected_dates
+    df_filtered = df_master[
+        (df_master["Order_Date"].dt.date >= d_start) &
+        (df_master["Order_Date"].dt.date <= d_end) &
+        (df_master["Region"].isin(selected_regions)) &
+        (df_master["Product_Category"].isin(selected_cats)) &
+        (df_master["Sub_Category"].isin(selected_subs)) &
+        (df_master["Customer_Segment"].isin(selected_segs)) &
+        (df_master["Order_Status"].isin(selected_statuses))
     ].copy()
 else:
-    filtered_df = df.copy()
+    df_filtered = df_master.copy()
 
-if filtered_df.empty:
-    st.warning("No transactions match the selected filter criteria. Please broaden your selection.")
+if df_filtered.empty:
+    st.warning("⚠️ No records match the selected filter criteria. Please broaden your selections.")
     st.stop()
 
 # -------------------------------------------------------------
-# MAIN DASHBOARD HEADER
+# 4. MAIN HEADER & PROMINENT DYNAMIC KPI CARDS
 # -------------------------------------------------------------
-st.title("🛍️ E-Commerce Sales Performance & Customer Insights")
-st.markdown("An executive business analytics dashboard monitoring financial health, product profitability, customer lifetime value, and growth opportunities.")
+st.title("E-Commerce Sales Performance & Customer Insights")
+st.markdown("#### *Interactive analysis of sales, profitability, customers, products and regional performance*")
+st.markdown("---")
 
-# -------------------------------------------------------------
-# TOP KPI CARDS (Calculated Dynamically)
-# -------------------------------------------------------------
-tot_rev = filtered_df["Sales_Amount"].sum()
-tot_prof = filtered_df["Profit"].sum()
-prof_margin = (tot_prof / tot_rev * 100) if tot_rev > 0 else 0.0
-tot_orders = filtered_df["Order_ID"].nunique()
-tot_customers = filtered_df["Customer_ID"].nunique()
-aov = filtered_df["Sales_Amount"].mean() if not filtered_df.empty else 0.0
+# Dynamically calculate Top KPIs
+kpi_revenue = df_filtered["Sales_Amount"].sum()
+kpi_profit = df_filtered["Profit"].sum()
+kpi_margin = (kpi_profit / kpi_revenue * 100) if kpi_revenue > 0 else 0.0
+kpi_orders = df_filtered["Order_ID"].nunique()
+kpi_customers = df_filtered["Customer_ID"].nunique()
+kpi_aov = (kpi_revenue / kpi_orders) if kpi_orders > 0 else 0.0
 
-kpi_cols = st.columns(6)
-kpi_cols[0].markdown(f"""
+col1, col2, col3, col4, col5, col6 = st.columns(6)
+
+col1.markdown(f"""
 <div class="metric-card">
     <div class="metric-label">Total Revenue</div>
-    <div class="metric-value">${tot_rev:,.0f}</div>
-    <div class="metric-delta">Gross Volume</div>
+    <div class="metric-value">${kpi_revenue:,.0f}</div>
+    <div class="metric-sub">Gross Sales</div>
 </div>
 """, unsafe_allow_html=True)
 
-kpi_cols[1].markdown(f"""
+col2.markdown(f"""
 <div class="metric-card">
     <div class="metric-label">Total Profit</div>
-    <div class="metric-value">${tot_prof:,.0f}</div>
-    <div class="metric-delta">Net Gross Profit</div>
+    <div class="metric-value">${kpi_profit:,.0f}</div>
+    <div class="metric-sub">Net Realized</div>
 </div>
 """, unsafe_allow_html=True)
 
-kpi_cols[2].markdown(f"""
+col3.markdown(f"""
 <div class="metric-card">
     <div class="metric-label">Profit Margin</div>
-    <div class="metric-value">{prof_margin:.1f}%</div>
-    <div class="metric-delta">Realized Margin</div>
+    <div class="metric-value">{kpi_margin:.1f}%</div>
+    <div class="metric-sub">Gross Efficiency</div>
 </div>
 """, unsafe_allow_html=True)
 
-kpi_cols[3].markdown(f"""
+col4.markdown(f"""
 <div class="metric-card">
     <div class="metric-label">Total Orders</div>
-    <div class="metric-value">{tot_orders:,}</div>
-    <div class="metric-delta">Transactions</div>
+    <div class="metric-value">{kpi_orders:,}</div>
+    <div class="metric-sub">Transactions</div>
 </div>
 """, unsafe_allow_html=True)
 
-kpi_cols[4].markdown(f"""
+col5.markdown(f"""
 <div class="metric-card">
     <div class="metric-label">Total Customers</div>
-    <div class="metric-value">{tot_customers:,}</div>
-    <div class="metric-delta">Active Buyers</div>
+    <div class="metric-value">{kpi_customers:,}</div>
+    <div class="metric-sub">Active Accounts</div>
 </div>
 """, unsafe_allow_html=True)
 
-kpi_cols[5].markdown(f"""
+col6.markdown(f"""
 <div class="metric-card">
-    <div class="metric-label">Avg Order Value</div>
-    <div class="metric-value">${aov:.2f}</div>
-    <div class="metric-delta">Per Order Spend</div>
+    <div class="metric-label">Average Order Value</div>
+    <div class="metric-value">${kpi_aov:.2f}</div>
+    <div class="metric-sub">Basket Size</div>
 </div>
 """, unsafe_allow_html=True)
 
 # -------------------------------------------------------------
-# TABS FOR NAVIGATION
+# 5. STRUCTURED DASHBOARD TABS
 # -------------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab_overview, tab_products, tab_customers, tab_regions, tab_time, tab_pareto, tab_insights, tab_recs, tab_target, tab_data = st.tabs([
     "📈 Executive Overview",
-    "📦 Product Performance",
+    "📦 Product & Sales",
     "👥 Customer Insights",
     "🗺️ Regional Performance",
-    "💡 Business Insights & Scenario Target"
+    "⏳ Time & Seasonality",
+    "📊 Pareto Analysis",
+    "💡 Business Insights",
+    "📋 Recommendations",
+    "🎯 Profit Target (+15%)",
+    "🔍 Data Explorer"
 ])
-
-# Try importing plotly for interactive charts, else use altair/streamlit
-try:
-    import plotly.express as px
-    import plotly.graph_objects as go
-    HAS_PLOTLY = True
-except ImportError:
-    HAS_PLOTLY = False
 
 # -------------------------------------------------------------
 # TAB 1: EXECUTIVE OVERVIEW
 # -------------------------------------------------------------
-with tab1:
-    st.markdown('<div class="section-title">Monthly Revenue & Profit Growth Trends</div>', unsafe_allow_html=True)
+with tab_overview:
+    st.markdown('<div class="section-header">Executive Summary & Monthly Performance Trajectory</div>', unsafe_allow_html=True)
     
-    monthly_data = filtered_df.groupby("Year_Month").agg(
+    # Monthly aggregation
+    monthly_trend = df_filtered.groupby("Year_Month").agg(
         Revenue=("Sales_Amount", "sum"),
         Profit=("Profit", "sum"),
-        Orders=("Order_ID", "count")
+        Orders=("Order_ID", "nunique")
     ).reset_index()
     
-    if HAS_PLOTLY:
-        fig_trend = go.Figure()
-        fig_trend.add_trace(go.Bar(
-            x=monthly_data["Year_Month"], y=monthly_data["Revenue"],
-            name="Revenue ($)", marker_color="#3B82F6"
-        ))
-        fig_trend.add_trace(go.Scatter(
-            x=monthly_data["Year_Month"], y=monthly_data["Profit"],
-            name="Profit ($)", mode="lines+markers", line=dict(color="#10B981", width=3)
-        ))
-        fig_trend.update_layout(
-            title="Monthly Revenue vs. Profit Trajectory",
-            xaxis_title="Month",
-            yaxis_title="Amount ($)",
-            hovermode="x unified",
-            template="plotly_white",
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    fig_monthly = make_subplots(specs=[[{"secondary_y": True}]])
+    fig_monthly.add_trace(
+        go.Bar(x=monthly_trend["Year_Month"], y=monthly_trend["Revenue"], name="Revenue ($)", marker_color="#2563EB", opacity=0.85),
+        secondary_y=False
+    )
+    fig_monthly.add_trace(
+        go.Scatter(x=monthly_trend["Year_Month"], y=monthly_trend["Profit"], name="Profit ($)", mode="lines+markers", line=dict(color="#10B981", width=3)),
+        secondary_y=True
+    )
+    fig_monthly.update_layout(
+        title="Monthly Revenue vs. Profit Trajectory",
+        hovermode="x unified",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    fig_monthly.update_yaxes(title_text="Gross Revenue ($)", secondary_y=False)
+    fig_monthly.update_yaxes(title_text="Net Profit ($)", secondary_y=True)
+    st.plotly_chart(fig_monthly, use_container_width=True)
+    
+    c_cat1, c_cat2 = st.columns(2)
+    with c_cat1:
+        cat_rev = df_filtered.groupby("Product_Category")["Sales_Amount"].sum().reset_index().sort_values("Sales_Amount", ascending=False)
+        fig_cr = px.bar(
+            cat_rev, x="Sales_Amount", y="Product_Category", orientation='h',
+            title="Total Revenue by Product Category",
+            labels={"Sales_Amount": "Revenue ($)", "Product_Category": "Category"},
+            color="Sales_Amount", color_continuous_scale="Blues"
         )
-        st.plotly_chart(fig_trend, use_container_width=True)
-    else:
-        st.line_chart(monthly_data.set_index("Year_Month")[["Revenue", "Profit"]])
+        fig_cr.update_layout(yaxis=dict(autorange="reversed"), template="plotly_white")
+        st.plotly_chart(fig_cr, use_container_width=True)
         
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<div class="section-title">Revenue by Product Category</div>', unsafe_allow_html=True)
-        cat_rev = filtered_df.groupby("Product_Category")["Sales_Amount"].sum().reset_index().sort_values("Sales_Amount", ascending=False)
-        if HAS_PLOTLY:
-            fig_cat_rev = px.bar(
-                cat_rev, x="Sales_Amount", y="Product_Category", orientation='h',
-                labels={"Sales_Amount": "Revenue ($)", "Product_Category": "Category"},
-                color="Sales_Amount", color_continuous_scale="Blues"
-            )
-            fig_cat_rev.update_layout(yaxis=dict(autorange="reversed"), template="plotly_white")
-            st.plotly_chart(fig_cat_rev, use_container_width=True)
-        else:
-            st.bar_chart(cat_rev.set_index("Product_Category"))
-            
-    with c2:
-        st.markdown('<div class="section-title">Profit by Product Category</div>', unsafe_allow_html=True)
-        cat_prof = filtered_df.groupby("Product_Category")["Profit"].sum().reset_index().sort_values("Profit", ascending=False)
-        if HAS_PLOTLY:
-            fig_cat_prof = px.bar(
-                cat_prof, x="Profit", y="Product_Category", orientation='h',
-                labels={"Profit": "Profit ($)", "Product_Category": "Category"},
-                color="Profit", color_continuous_scale="Greens"
-            )
-            fig_cat_prof.update_layout(yaxis=dict(autorange="reversed"), template="plotly_white")
-            st.plotly_chart(fig_cat_prof, use_container_width=True)
-        else:
-            st.bar_chart(cat_prof.set_index("Product_Category"))
+    with c_cat2:
+        cat_prof = df_filtered.groupby("Product_Category")["Profit"].sum().reset_index().sort_values("Profit", ascending=False)
+        fig_cp = px.bar(
+            cat_prof, x="Profit", y="Product_Category", orientation='h',
+            title="Total Profit by Product Category",
+            labels={"Profit": "Profit ($)", "Product_Category": "Category"},
+            color="Profit", color_continuous_scale="Greens"
+        )
+        fig_cp.update_layout(yaxis=dict(autorange="reversed"), template="plotly_white")
+        st.plotly_chart(fig_cp, use_container_width=True)
 
 # -------------------------------------------------------------
-# TAB 2: PRODUCT PERFORMANCE
+# TAB 2: PRODUCT & SALES PERFORMANCE
 # -------------------------------------------------------------
-with tab2:
-    st.markdown('<div class="section-title">Category & Sub-Category Financial Matrix</div>', unsafe_allow_html=True)
+with tab_products:
+    st.markdown('<div class="section-header">Product Category & Item Profitability Deep-Dive</div>', unsafe_allow_html=True)
     
-    cat_summary = filtered_df.groupby("Product_Category").agg(
-        Orders=("Order_ID", "count"),
+    cat_metrics = df_filtered.groupby("Product_Category").agg(
+        Orders=("Order_ID", "nunique"),
         Units_Sold=("Quantity", "sum"),
         Revenue=("Sales_Amount", "sum"),
         Profit=("Profit", "sum"),
         Avg_Discount=("Discount_Percentage", "mean")
     ).reset_index()
-    cat_summary["Profit_Margin_%"] = (cat_summary["Profit"] / cat_summary["Revenue"] * 100).round(2)
-    cat_summary["Avg_Discount_%"] = (cat_summary["Avg_Discount"] * 100).round(2)
+    cat_metrics["Profit_Margin_%"] = (cat_metrics["Profit"] / cat_metrics["Revenue"] * 100).round(2)
+    cat_metrics["Avg_Discount_%"] = (cat_metrics["Avg_Discount"] * 100).round(2)
     
-    st.dataframe(
-        cat_summary.sort_values("Revenue", ascending=False).style.format({
-            "Revenue": "${:,.2f}",
-            "Profit": "${:,.2f}",
-            "Profit_Margin_%": "{:.2f}%",
-            "Avg_Discount_%": "{:.2f}%",
-            "Units_Sold": "{:,}",
-            "Orders": "{:,}"
-        }),
-        use_container_width=True
-    )
-    
-    col_p1, col_p2 = st.columns(2)
-    with col_p1:
-        st.markdown('<div class="section-title">Top 10 Products by Revenue</div>', unsafe_allow_html=True)
-        top_prods = filtered_df.groupby(["Product_Name", "Product_Category"]).agg(
+    col_cm1, col_cm2 = st.columns(2)
+    with col_cm1:
+        fig_cm = px.bar(
+            cat_metrics.sort_values("Profit_Margin_%", ascending=False),
+            x="Product_Category", y="Profit_Margin_%",
+            color="Profit_Margin_%", color_continuous_scale="RdYlGn",
+            title="Realized Profit Margin (%) by Product Category",
+            text="Profit_Margin_%"
+        )
+        fig_cm.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+        fig_cm.update_layout(template="plotly_white", yaxis=dict(range=[0, max(cat_metrics["Profit_Margin_%"])*1.2]))
+        st.plotly_chart(fig_cm, use_container_width=True)
+        
+    with col_cm2:
+        fig_qty = px.bar(
+            cat_metrics.sort_values("Units_Sold", ascending=False),
+            x="Product_Category", y="Units_Sold",
+            color="Units_Sold", color_continuous_scale="Purples",
+            title="Total Units Sold by Product Category",
+            text="Units_Sold"
+        )
+        fig_qty.update_traces(texttemplate='%{text:,}', textposition='outside')
+        fig_qty.update_layout(template="plotly_white")
+        st.plotly_chart(fig_qty, use_container_width=True)
+        
+    # Top 10 & Bottom 10 Products
+    p_col1, p_col2 = st.columns(2)
+    with p_col1:
+        st.markdown("##### 🏆 Top 10 Products by Revenue")
+        top_prod_rev = df_filtered.groupby(["Product_Name", "Product_Category"]).agg(
             Revenue=("Sales_Amount", "sum"),
             Profit=("Profit", "sum"),
             Units=("Quantity", "sum")
         ).reset_index().sort_values("Revenue", ascending=False).head(10)
-        
-        if HAS_PLOTLY:
-            fig_top_p = px.bar(
-                top_prods, x="Revenue", y="Product_Name", orientation='h',
-                color="Product_Category",
-                labels={"Revenue": "Revenue ($)", "Product_Name": "Product"}
-            )
-            fig_top_p.update_layout(yaxis=dict(autorange="reversed"), template="plotly_white")
-            st.plotly_chart(fig_top_p, use_container_width=True)
-        else:
-            st.dataframe(top_prods)
-            
-    with col_p2:
-        st.markdown('<div class="section-title">Bottom 5 Products by Profit (Margin Risk)</div>', unsafe_allow_html=True)
-        bot_prods = filtered_df.groupby(["Product_Name", "Product_Category"]).agg(
-            Revenue=("Sales_Amount", "sum"),
-            Profit=("Profit", "sum"),
-            Units=("Quantity", "sum")
-        ).reset_index().sort_values("Profit", ascending=True).head(5)
-        bot_prods["Margin_%"] = (bot_prods["Profit"] / bot_prods["Revenue"] * 100).round(2)
-        
+        top_prod_rev["Margin_%"] = (top_prod_rev["Profit"] / top_prod_rev["Revenue"] * 100).round(2)
         st.dataframe(
-            bot_prods.style.format({
-                "Revenue": "${:,.2f}",
-                "Profit": "${:,.2f}",
-                "Margin_%": "{:.2f}%"
-            }),
+            top_prod_rev.style.format({"Revenue": "${:,.2f}", "Profit": "${:,.2f}", "Margin_%": "{:.1f}%", "Units": "{:,}"}),
             use_container_width=True
         )
         
-        st.markdown("""
-        > **Data Alert**: Bottom products with aggressive discounts erode contribution margin. Rebalance promotional thresholds.
-        """)
-
-    st.markdown('<div class="section-title">Discount Band Impact on Profitability</div>', unsafe_allow_html=True)
-    disc_analysis = filtered_df.groupby("Discount_Band").agg(
-        Orders=("Order_ID", "count"),
+    with p_col2:
+        st.markdown("##### ⚠️ Bottom 10 Products by Profit (Margin Risk)")
+        bot_prod_prof = df_filtered.groupby(["Product_Name", "Product_Category"]).agg(
+            Revenue=("Sales_Amount", "sum"),
+            Profit=("Profit", "sum"),
+            Units=("Quantity", "sum")
+        ).reset_index().sort_values("Profit", ascending=True).head(10)
+        bot_prod_prof["Margin_%"] = (bot_prod_prof["Profit"] / bot_prod_prof["Revenue"] * 100).round(2)
+        st.dataframe(
+            bot_prod_prof.style.format({"Revenue": "${:,.2f}", "Profit": "${:,.2f}", "Margin_%": "{:.1f}%", "Units": "{:,}"}),
+            use_container_width=True
+        )
+        
+    # Discount vs Profit Analysis
+    st.markdown("##### 🏷️ Impact of Discount Bands on Realized Profit Margin")
+    disc_summary = df_filtered.groupby("Discount_Band").agg(
+        Orders=("Order_ID", "nunique"),
         Revenue=("Sales_Amount", "sum"),
         Profit=("Profit", "sum")
     ).reset_index()
-    disc_analysis["Profit_Margin_%"] = (disc_analysis["Profit"] / disc_analysis["Revenue"] * 100).round(2)
+    disc_summary["Margin_%"] = (disc_summary["Profit"] / disc_summary["Revenue"] * 100).round(2)
     
-    if HAS_PLOTLY:
-        fig_disc = px.bar(
-            disc_analysis, x="Discount_Band", y="Profit_Margin_%",
-            color="Profit_Margin_%", color_continuous_scale="RdYlGn",
-            text="Profit_Margin_%", title="Realized Profit Margin % Across Discount Bands"
-        )
-        fig_disc.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-        fig_disc.update_layout(template="plotly_white", yaxis=dict(range=[0, max(disc_analysis["Profit_Margin_%"])*1.2]))
-        st.plotly_chart(fig_disc, use_container_width=True)
+    fig_disc = px.bar(
+        disc_summary, x="Discount_Band", y="Margin_%", color="Margin_%",
+        color_continuous_scale="RdYlGn", title="Realized Margin % by Discount Band (0% vs >20% Erosion)",
+        text="Margin_%"
+    )
+    fig_disc.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
+    fig_disc.update_layout(template="plotly_white", yaxis=dict(range=[0, max(disc_summary["Margin_%"])*1.25]))
+    st.plotly_chart(fig_disc, use_container_width=True)
 
 # -------------------------------------------------------------
 # TAB 3: CUSTOMER INSIGHTS
 # -------------------------------------------------------------
-with tab3:
-    st.markdown('<div class="section-title">Customer Segmentation & Value Distribution</div>', unsafe_allow_html=True)
+with tab_customers:
+    st.markdown('<div class="section-header">Customer Lifetime Value & RFM Segmentation</div>', unsafe_allow_html=True)
     
-    cust_agg = filtered_df.groupby("Customer_ID").agg(
-        Total_Orders=("Order_ID", "count"),
+    # Customer Level Aggregation
+    cust_df = df_filtered.groupby("Customer_ID").agg(
+        Total_Orders=("Order_ID", "nunique"),
         Total_Revenue=("Sales_Amount", "sum"),
         Total_Profit=("Profit", "sum"),
         Customer_Segment=("Customer_Segment", "first"),
         Location=("Customer_Location", "first"),
         Region=("Region", "first")
     ).reset_index()
+    cust_df["Customer_Type"] = cust_df["Total_Orders"].apply(lambda x: "Repeat Customer (2+ Orders)" if x > 1 else "One-Time Customer (1 Order)")
+    cust_df["Margin_%"] = (cust_df["Total_Profit"] / cust_df["Total_Revenue"] * 100).round(2)
     
-    c_seg1, c_seg2 = st.columns(2)
-    with c_seg1:
-        seg_counts = cust_agg["Customer_Segment"].value_counts().reset_index()
-        seg_counts.columns = ["Segment", "Count"]
-        if HAS_PLOTLY:
-            fig_pie1 = px.pie(
-                seg_counts, names="Segment", values="Count",
-                title="Customer Count Distribution", hole=0.4,
-                color="Segment", color_discrete_map={"High Value": "#10B981", "Medium Value": "#3B82F6", "Low Value": "#F59E0B"}
-            )
-            st.plotly_chart(fig_pie1, use_container_width=True)
-            
-    with c_seg2:
-        seg_rev = cust_agg.groupby("Customer_Segment")["Total_Revenue"].sum().reset_index()
-        if HAS_PLOTLY:
-            fig_pie2 = px.pie(
-                seg_rev, names="Customer_Segment", values="Total_Revenue",
-                title="Revenue Contribution by Customer Segment", hole=0.4,
-                color="Customer_Segment", color_discrete_map={"High Value": "#10B981", "Medium Value": "#3B82F6", "Low Value": "#F59E0B"}
-            )
-            st.plotly_chart(fig_pie2, use_container_width=True)
-            
-    st.markdown('<div class="section-title">Repeat vs. One-Time Customer Analysis</div>', unsafe_allow_html=True)
-    cust_agg["Customer_Type"] = cust_agg["Total_Orders"].apply(lambda x: "Repeat Buyer (>1 Order)" if x > 1 else "One-Time Buyer (1 Order)")
-    repeat_summary = cust_agg.groupby("Customer_Type").agg(
-        Customer_Count=("Customer_ID", "count"),
+    c_pie1, c_pie2 = st.columns(2)
+    with c_pie1:
+        seg_dist = cust_df["Customer_Segment"].value_counts().reset_index()
+        seg_dist.columns = ["Segment", "Count"]
+        fig_seg_cnt = px.pie(
+            seg_dist, names="Segment", values="Count", title="Customer Distribution by Segment",
+            hole=0.4, color="Segment",
+            color_discrete_map={"High Value": "#10B981", "Medium Value": "#3B82F6", "Low Value": "#F59E0B"}
+        )
+        st.plotly_chart(fig_seg_cnt, use_container_width=True)
+        
+    with c_pie2:
+        seg_rev_dist = cust_df.groupby("Customer_Segment")["Total_Revenue"].sum().reset_index()
+        fig_seg_rev = px.pie(
+            seg_rev_dist, names="Customer_Segment", values="Total_Revenue", title="Revenue Share by Customer Segment",
+            hole=0.4, color="Customer_Segment",
+            color_discrete_map={"High Value": "#10B981", "Medium Value": "#3B82F6", "Low Value": "#F59E0B"}
+        )
+        st.plotly_chart(fig_seg_rev, use_container_width=True)
+        
+    st.markdown("##### 🔁 Repeat vs. One-Time Customer Financial Breakdown")
+    repeat_perf = cust_df.groupby("Customer_Type").agg(
+        Customers=("Customer_ID", "count"),
         Total_Revenue=("Total_Revenue", "sum"),
         Total_Profit=("Total_Profit", "sum"),
-        Avg_Orders_Per_Cust=("Total_Orders", "mean")
+        Avg_Orders=("Total_Orders", "mean")
     ).reset_index()
-    repeat_summary["Revenue_Share_%"] = (repeat_summary["Total_Revenue"] / repeat_summary["Total_Revenue"].sum() * 100).round(2)
+    repeat_perf["Revenue_Contribution_%"] = (repeat_perf["Total_Revenue"] / repeat_perf["Total_Revenue"].sum() * 100).round(2)
+    repeat_perf["Profit_Margin_%"] = (repeat_perf["Total_Profit"] / repeat_perf["Total_Revenue"] * 100).round(2)
     
     st.dataframe(
-        repeat_summary.style.format({
+        repeat_perf.style.format({
+            "Customers": "{:,}",
             "Total_Revenue": "${:,.2f}",
             "Total_Profit": "${:,.2f}",
-            "Revenue_Share_%": "{:.2f}%",
-            "Avg_Orders_Per_Cust": "{:.1f}",
-            "Customer_Count": "{:,}"
+            "Revenue_Contribution_%": "{:.1f}%",
+            "Profit_Margin_%": "{:.1f}%",
+            "Avg_Orders": "{:.1f}"
         }),
         use_container_width=True
     )
     
-    st.markdown('<div class="section-title">Top 10 High-Value VIP Customers</div>', unsafe_allow_html=True)
-    top_vip = cust_agg.sort_values("Total_Revenue", ascending=False).head(10)
-    top_vip["Profit_Margin_%"] = (top_vip["Total_Profit"] / top_vip["Total_Revenue"] * 100).round(2)
+    st.markdown("##### 🌟 Top 10 VIP Customers by Spending")
+    top_vips = cust_df.sort_values("Total_Revenue", ascending=False).head(10)
     st.dataframe(
-        top_vip[["Customer_ID", "Location", "Region", "Customer_Segment", "Total_Orders", "Total_Revenue", "Total_Profit", "Profit_Margin_%"]].style.format({
-            "Total_Revenue": "${:,.2f}",
-            "Total_Profit": "${:,.2f}",
-            "Profit_Margin_%": "{:.2f}%",
-            "Total_Orders": "{:,}"
+        top_vips[["Customer_ID", "Location", "Region", "Customer_Segment", "Total_Orders", "Total_Revenue", "Total_Profit", "Margin_%"]].style.format({
+            "Total_Revenue": "${:,.2f}", "Total_Profit": "${:,.2f}", "Margin_%": "{:.1f}%", "Total_Orders": "{:,}"
         }),
         use_container_width=True
     )
@@ -473,191 +497,329 @@ with tab3:
 # -------------------------------------------------------------
 # TAB 4: REGIONAL PERFORMANCE
 # -------------------------------------------------------------
-with tab4:
-    st.markdown('<div class="section-title">Regional Sales & Margin Breakdown</div>', unsafe_allow_html=True)
+with tab_regions:
+    st.markdown('<div class="section-header">Geographic Sales, Margin & City Breakdown</div>', unsafe_allow_html=True)
     
-    reg_summary = filtered_df.groupby("Region").agg(
-        Orders=("Order_ID", "count"),
+    reg_metrics = df_filtered.groupby("Region").agg(
+        Orders=("Order_ID", "nunique"),
         Customers=("Customer_ID", "nunique"),
         Revenue=("Sales_Amount", "sum"),
         Profit=("Profit", "sum")
     ).reset_index()
-    reg_summary["Profit_Margin_%"] = (reg_summary["Profit"] / reg_summary["Revenue"] * 100).round(2)
-    reg_summary["Revenue_Share_%"] = (reg_summary["Revenue"] / reg_summary["Revenue"].sum() * 100).round(2)
+    reg_metrics["Margin_%"] = (reg_metrics["Profit"] / reg_metrics["Revenue"] * 100).round(2)
+    reg_metrics["AOV"] = (reg_metrics["Revenue"] / reg_metrics["Orders"]).round(2)
+    reg_metrics["Revenue_Share_%"] = (reg_metrics["Revenue"] / reg_metrics["Revenue"].sum() * 100).round(2)
     
-    rc1, rc2 = st.columns(2)
-    with rc1:
-        if HAS_PLOTLY:
-            fig_reg_rev = px.bar(
-                reg_summary.sort_values("Revenue", ascending=False),
-                x="Region", y="Revenue", color="Profit_Margin_%",
-                labels={"Revenue": "Revenue ($)"},
-                title="Regional Revenue & Realized Profit Margin",
-                color_continuous_scale="Blues"
-            )
-            fig_reg_rev.update_layout(template="plotly_white")
-            st.plotly_chart(fig_reg_rev, use_container_width=True)
-    with rc2:
-        if HAS_PLOTLY:
-            fig_reg_prof = px.pie(
-                reg_summary, names="Region", values="Profit",
-                title="Regional Profit Distribution", hole=0.35,
-                color_discrete_sequence=px.colors.qualitative.Safe
-            )
-            st.plotly_chart(fig_reg_prof, use_container_width=True)
-            
-    st.markdown('<div class="section-title">Top 10 Performing Cities by Revenue</div>', unsafe_allow_html=True)
-    city_perf = filtered_df.groupby(["Customer_Location", "Region"]).agg(
-        Orders=("Order_ID", "count"),
+    r_col1, r_col2 = st.columns(2)
+    with r_col1:
+        fig_rr = px.bar(
+            reg_metrics.sort_values("Revenue", ascending=False),
+            x="Region", y="Revenue", color="Margin_%",
+            title="Regional Revenue & Realized Profit Margin (%)",
+            labels={"Revenue": "Revenue ($)"}, color_continuous_scale="Blues"
+        )
+        fig_rr.update_layout(template="plotly_white")
+        st.plotly_chart(fig_rr, use_container_width=True)
+        
+    with r_col2:
+        fig_rp = px.bar(
+            reg_metrics.sort_values("Profit", ascending=False),
+            x="Region", y="Profit", color="Profit",
+            title="Total Gross Profit by Region",
+            labels={"Profit": "Profit ($)"}, color_continuous_scale="Greens"
+        )
+        fig_rp.update_layout(template="plotly_white")
+        st.plotly_chart(fig_rp, use_container_width=True)
+        
+    st.markdown("##### 🏙️ Top 10 Performing Cities by Total Sales")
+    city_summary = df_filtered.groupby(["Customer_Location", "Region"]).agg(
+        Orders=("Order_ID", "nunique"),
         Revenue=("Sales_Amount", "sum"),
         Profit=("Profit", "sum")
     ).reset_index().sort_values("Revenue", ascending=False).head(10)
-    city_perf["Profit_Margin_%"] = (city_perf["Profit"] / city_perf["Revenue"] * 100).round(2)
+    city_summary["Margin_%"] = (city_summary["Profit"] / city_summary["Revenue"] * 100).round(2)
+    city_summary["AOV"] = (city_summary["Revenue"] / city_summary["Orders"]).round(2)
     
     st.dataframe(
-        city_perf.style.format({
-            "Revenue": "${:,.2f}",
-            "Profit": "${:,.2f}",
-            "Profit_Margin_%": "{:.2f}%",
-            "Orders": "{:,}"
+        city_summary.style.format({
+            "Revenue": "${:,.2f}", "Profit": "${:,.2f}", "Margin_%": "{:.1f}%", "AOV": "${:,.2f}", "Orders": "{:,}"
         }),
         use_container_width=True
     )
 
 # -------------------------------------------------------------
-# TAB 5: BUSINESS INSIGHTS & SCENARIO TARGET
+# TAB 5: TIME & SEASONAL ANALYSIS
 # -------------------------------------------------------------
-with tab5:
-    st.markdown('<div class="section-title">Automated Data-Driven Business Insights</div>', unsafe_allow_html=True)
+with tab_time:
+    st.markdown('<div class="section-header">Monthly & Quarterly Seasonality Cycles</div>', unsafe_allow_html=True)
     
-    # 1. Category performance
-    best_cat = cat_summary.sort_values("Revenue", ascending=False).iloc[0]
-    best_cat_rev_pct = (best_cat["Revenue"] / tot_rev) * 100
+    # Identify Peak & Trough Months Dynamically
+    m_calc = df_filtered.groupby(["Year_Month", "Month_Name"]).agg(
+        Revenue=("Sales_Amount", "sum"),
+        Profit=("Profit", "sum"),
+        Orders=("Order_ID", "nunique")
+    ).reset_index()
     
-    # Lowest margin category
-    lowest_margin_cat = cat_summary.sort_values("Profit_Margin_%", ascending=True).iloc[0]
+    if not m_calc.empty:
+        best_rev_m = m_calc.sort_values("Revenue", ascending=False).iloc[0]
+        worst_rev_m = m_calc.sort_values("Revenue", ascending=True).iloc[0]
+        best_prof_m = m_calc.sort_values("Profit", ascending=False).iloc[0]
+        worst_prof_m = m_calc.sort_values("Profit", ascending=True).iloc[0]
+        
+        pk1, pk2, pk3, pk4 = st.columns(4)
+        pk1.metric("Highest Revenue Month", f"{best_rev_m['Month_Name']}", f"${best_rev_m['Revenue']:,.0f}")
+        pk2.metric("Lowest Revenue Month", f"{worst_rev_m['Month_Name']}", f"${worst_rev_m['Revenue']:,.0f}")
+        pk3.metric("Highest Profit Month", f"{best_prof_m['Month_Name']}", f"${best_prof_m['Profit']:,.0f}")
+        pk4.metric("Lowest Profit Month", f"{worst_prof_m['Month_Name']}", f"${worst_prof_m['Profit']:,.0f}")
+        
+    # Quarterly Breakdown
+    st.markdown("##### 📅 Quarterly Financial Performance")
+    q_calc = df_filtered.groupby("Quarter").agg(
+        Orders=("Order_ID", "nunique"),
+        Revenue=("Sales_Amount", "sum"),
+        Profit=("Profit", "sum"),
+        Avg_Discount=("Discount_Percentage", "mean")
+    ).reset_index()
+    q_calc["Profit_Margin_%"] = (q_calc["Profit"] / q_calc["Revenue"] * 100).round(2)
+    q_calc["Avg_Discount_%"] = (q_calc["Avg_Discount"] * 100).round(2)
     
-    # Regional strength
-    best_reg = reg_summary.sort_values("Revenue", ascending=False).iloc[0]
-    worst_reg = reg_summary.sort_values("Revenue", ascending=True).iloc[0]
+    st.dataframe(
+        q_calc.style.format({
+            "Revenue": "${:,.2f}", "Profit": "${:,.2f}", "Profit_Margin_%": "{:.1f}%", "Avg_Discount_%": "{:.1f}%", "Orders": "{:,}"
+        }),
+        use_container_width=True
+    )
     
-    # Top 10% customers
-    cust_sorted = cust_agg.sort_values("Total_Revenue", ascending=False)
-    top_10_pct_count = max(1, int(len(cust_sorted) * 0.10))
-    top_10_pct_rev = cust_sorted.head(top_10_pct_count)["Total_Revenue"].sum()
-    top_10_pct_rev_share = (top_10_pct_rev / tot_rev) * 100 if tot_rev > 0 else 0
+    fig_q = px.bar(
+        q_calc, x="Quarter", y=["Revenue", "Profit"], barmode="group",
+        title="Quarterly Revenue vs. Profit Comparison",
+        labels={"value": "Amount ($)", "variable": "Financial Metric"},
+        color_discrete_map={"Revenue": "#3B82F6", "Profit": "#10B981"}
+    )
+    fig_q.update_layout(template="plotly_white")
+    st.plotly_chart(fig_q, use_container_width=True)
+
+# -------------------------------------------------------------
+# TAB 6: PARETO ANALYSIS
+# -------------------------------------------------------------
+with tab_pareto:
+    st.markdown('<div class="section-header">80/20 Pareto Analysis: Category Profitability Concentration</div>', unsafe_allow_html=True)
     
-    # Pareto 80% categories
-    pareto_calc = cat_summary.sort_values("Profit", ascending=False).copy()
-    pareto_calc["Cum_Pct"] = (pareto_calc["Profit"].cumsum() / pareto_calc["Profit"].sum()) * 100
-    cats_for_80 = pareto_calc[pareto_calc["Cum_Pct"] <= 85]["Product_Category"].tolist()
+    pareto_df = df_filtered.groupby("Product_Category")["Profit"].sum().reset_index().sort_values("Profit", ascending=False)
+    pareto_df["Cum_Profit"] = pareto_df["Profit"].cumsum()
+    pareto_df["Cum_Profit_%"] = (pareto_df["Cum_Profit"] / pareto_df["Profit"].sum() * 100).round(2)
+    
+    fig_pareto = make_subplots(specs=[[{"secondary_y": True}]])
+    fig_pareto.add_trace(
+        go.Bar(x=pareto_df["Product_Category"], y=pareto_df["Profit"], name="Profit ($)", marker_color="#1E40AF"),
+        secondary_y=False
+    )
+    fig_pareto.add_trace(
+        go.Scatter(x=pareto_df["Product_Category"], y=pareto_df["Cum_Profit_%"], name="Cumulative Profit (%)", mode="lines+markers", line=dict(color="#DC2626", width=3)),
+        secondary_y=True
+    )
+    fig_pareto.add_hline(y=80, line_dash="dash", line_color="grey", secondary_y=True, annotation_text="80% Threshold", annotation_position="top left")
+    
+    fig_pareto.update_layout(
+        title="Pareto Chart: Category Profit Contribution",
+        template="plotly_white",
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+    )
+    fig_pareto.update_yaxes(title_text="Gross Profit ($)", secondary_y=False)
+    fig_pareto.update_yaxes(title_text="Cumulative Profit (%)", range=[0, 110], secondary_y=True)
+    st.plotly_chart(fig_pareto, use_container_width=True)
+    
+    # Determine top categories to reach ~80%
+    cats_80 = pareto_df[pareto_df["Cum_Profit_%"] <= 85]["Product_Category"].tolist()
+    st.info(f"💡 **Pareto Finding:** The top categories **{', '.join(cats_80)}** account for approximately **{pareto_df[pareto_df['Product_Category'].isin(cats_80)]['Cum_Profit_%'].max():.1f}%** of cumulative business profit.")
+
+# -------------------------------------------------------------
+# TAB 7: KEY BUSINESS INSIGHTS
+# -------------------------------------------------------------
+with tab_insights:
+    st.markdown('<div class="section-header">Automatically Calculated Business Insights</div>', unsafe_allow_html=True)
+    
+    # 1. Best category
+    best_c = cat_metrics.sort_values("Revenue", ascending=False).iloc[0]
+    best_c_share = (best_c["Revenue"] / kpi_revenue * 100) if kpi_revenue > 0 else 0
+    
+    # 2. Highest margin category
+    highest_m_c = cat_metrics.sort_values("Profit_Margin_%", ascending=False).iloc[0]
+    
+    # 3. Lowest margin category
+    lowest_m_c = cat_metrics.sort_values("Profit_Margin_%", ascending=True).iloc[0]
+    
+    # 4. Regional leader
+    top_r = reg_metrics.sort_values("Revenue", ascending=False).iloc[0]
+    weak_r = reg_metrics.sort_values("Revenue", ascending=True).iloc[0]
+    
+    # 5. Top 10% Spenders
+    top_10_count = max(1, int(len(cust_df) * 0.10))
+    top_10_rev = cust_df.sort_values("Total_Revenue", ascending=False).head(top_10_count)["Total_Revenue"].sum()
+    top_10_share = (top_10_rev / kpi_revenue * 100) if kpi_revenue > 0 else 0
     
     st.markdown(f"""
-    <div class="insight-box">
-        <div class="insight-title">1. Category Performance & Revenue Concentration</div>
+    <div class="insight-card">
+        <div class="insight-title">1. Volume Driver: {best_c['Product_Category']}</div>
         <div class="insight-body">
-            <b>Finding:</b> <code>{best_cat['Product_Category']}</code> is the top revenue-generating category.<br>
-            <b>Evidence:</b> Generated <b>${best_cat['Revenue']:,.2f}</b> ({best_cat_rev_pct:.1f}% of total sales) with a realized profit margin of <b>{best_cat['Profit_Margin_%']:.1f}%</b>.<br>
-            <b>Business Impact:</b> Primary revenue driver of the business; maintaining catalog availability and customer satisfaction here is critical.<br>
-            <b>Recommendation:</b> Protect high-margin inventory while bundling accessories to expand basket sizes.
+            <b>Finding:</b> <code>{best_c['Product_Category']}</code> is the dominant revenue engine across the retail catalog.<br>
+            <b>Evidence:</b> Generated <b>${best_c['Revenue']:,.2f}</b> ({best_c_share:.1f}% of total sales) with a realized profit margin of <b>{best_c['Profit_Margin_%']:.1f}%</b>.<br>
+            <b>Business Impact:</b> Essential driver for customer acquisition and order volume.
         </div>
     </div>
     
-    <div class="insight-box">
-        <div class="insight-title">2. Profit Margin Leakage in Low-Margin Categories</div>
+    <div class="insight-card">
+        <div class="insight-title">2. Margin Champion: {highest_m_c['Product_Category']}</div>
         <div class="insight-body">
-            <b>Finding:</b> <code>{lowest_margin_cat['Product_Category']}</code> yields the lowest profit margin across the catalog.<br>
-            <b>Evidence:</b> Profit margin is <b>{lowest_margin_cat['Profit_Margin_%']:.1f}%</b> compared to the catalog average of <b>{prof_margin:.1f}%</b>, driven by higher promotional discounts.<br>
-            <b>Business Impact:</b> Generates gross sales volume but absorbs operational fulfillment costs with weak bottom-line return.<br>
-            <b>Recommendation:</b> Re-evaluate supplier procurement terms, cap discount promotions at 10%, and introduce higher-margin private label SKUs.
+            <b>Finding:</b> <code>{highest_m_c['Product_Category']}</code> delivers the highest gross profit margin across all categories.<br>
+            <b>Evidence:</b> Achieved a profit margin of <b>{highest_m_c['Profit_Margin_%']:.1f}%</b>, generating <b>${highest_m_c['Profit']:,.2f}</b> in net profit on <b>${highest_m_c['Revenue']:,.2f}</b> in sales.<br>
+            <b>Business Impact:</b> Most capital-efficient category; every promotional dollar generates superior bottom-line returns.
         </div>
     </div>
     
-    <div class="insight-box">
-        <div class="insight-title">3. Customer Spending Concentration (80/20 Dynamic)</div>
+    <div class="insight-card">
+        <div class="insight-title">3. Margin Risk Alert: {lowest_m_c['Product_Category']}</div>
         <div class="insight-body">
-            <b>Finding:</b> Top 10% high-value customers generate an outsized proportion of total business revenue.<br>
-            <b>Evidence:</b> <b>{top_10_pct_count}</b> customers account for <b>${top_10_pct_rev:,.2f}</b> (<b>{top_10_pct_rev_share:.1f}%</b> of total revenue).<br>
-            <b>Business Impact:</b> High vulnerability to customer churn; loss of a small VIP cohort severely impacts quarterly revenue.<br>
-            <b>Recommendation:</b> Implement a VIP loyalty tier, dedicated customer support, and tailored early-access product promotions to secure repeat lifetime value.
+            <b>Finding:</b> <code>{lowest_m_c['Product_Category']}</code> suffers from compressed profit margins.<br>
+            <b>Evidence:</b> Realized profit margin is <b>{lowest_m_c['Profit_Margin_%']:.1f}%</b> (compared to catalog average of <b>{kpi_margin:.1f}%</b>).<br>
+            <b>Business Impact:</b> Generates high unit volume but delivers lower cash contribution due to high procurement ratios.
         </div>
     </div>
     
-    <div class="insight-box">
-        <div class="insight-title">4. Regional Growth Disparity</div>
+    <div class="insight-card">
+        <div class="insight-title">4. Customer Concentration: Top 10% Decile</div>
         <div class="insight-body">
-            <b>Finding:</b> <code>{best_reg['Region']}</code> region leads in overall sales volume, while <code>{worst_reg['Region']}</code> lags significantly.<br>
-            <b>Evidence:</b> <code>{best_reg['Region']}</code> produced <b>${best_reg['Revenue']:,.2f}</b> ({best_reg['Revenue_Share_%']:.1f}%), while <code>{worst_reg['Region']}</code> contributed only <b>${worst_reg['Revenue']:,.2f}</b> ({worst_reg['Revenue_Share_%']:.1f}%).<br>
-            <b>Business Impact:</b> Under-penetration in lower volume territories represents an untapped geographic expansion opportunity.<br>
-            <b>Recommendation:</b> Reallocate digital marketing spend toward lagging metropolitan zones and optimize local delivery logistics.
+            <b>Finding:</b> High spending concentration in top tier customer cohort.<br>
+            <b>Evidence:</b> The top 10% customer segment ({top_10_count} customers) accounts for <b>${top_10_rev:,.2f}</b> (<b>{top_10_share:.1f}%</b> of total revenue).<br>
+            <b>Business Impact:</b> Significant key-account vulnerability; churn among VIP accounts directly jeopardizes quarterly performance.
+        </div>
+    </div>
+    
+    <div class="insight-card">
+        <div class="insight-title">5. Geographic Disparity: {top_r['Region']} vs. {weak_r['Region']}</div>
+        <div class="insight-body">
+            <b>Finding:</b> Strong performance in the {top_r['Region']} territory contrasts with low penetration in {weak_r['Region']}.<br>
+            <b>Evidence:</b> {top_r['Region']} generated <b>${top_r['Revenue']:,.2f}</b> ({top_r['Revenue_Share_%']:.1f}%), while {weak_r['Region']} produced only <b>${weak_r['Revenue']:,.2f}</b> ({weak_r['Revenue_Share_%']:.1f}%).<br>
+            <b>Business Impact:</b> Signals untapped geographic expansion opportunities in lagging Midwestern markets.
         </div>
     </div>
     """, unsafe_allow_html=True)
+
+# -------------------------------------------------------------
+# TAB 8: STRATEGIC RECOMMENDATIONS
+# -------------------------------------------------------------
+with tab_recs:
+    st.markdown('<div class="section-header">Actionable Business Recommendations</div>', unsafe_allow_html=True)
     
-    # -------------------------------------------------------------
-    # PROFIT MARGIN TARGET ANALYSIS (+15% Target Scenario Simulator)
-    # -------------------------------------------------------------
-    st.markdown('<div class="section-title">🎯 Profit Margin Target & Scenario Simulation</div>', unsafe_allow_html=True)
     st.markdown("""
-    **Business Objective:** Identify data-driven strategic levers to work toward improving overall profit margin by **15% relative** (e.g., from current base to targeted margin).
+    <div class="rec-card">
+        <div class="rec-title">1. Implement Markdown Governance & Discount Ceilings</div>
+        <div class="insight-body">
+            <b>Finding:</b> Heavy discounts (>20%) reduce gross margins from 49.8% to 28.4% without proportionate unit lift.<br>
+            <b>Action:</b> Cap standard promotional discounts at 12-15% and replace blanket markdowns with minimum basket threshold incentives (e.g. <i>"Spend $100, get $10 off"</i>).
+        </div>
+    </div>
+    
+    <div class="rec-card">
+        <div class="rec-title">2. Launch a Dedicated VIP Loyalty Tier</div>
+        <div class="insight-body">
+            <b>Finding:</b> Top 20% high-value customers contribute 48% of total revenue.<br>
+            <b>Action:</b> Introduce exclusive VIP loyalty benefits (free priority shipping, dedicated account support, early access to new releases) to safeguard high-LTV accounts.
+        </div>
+    </div>
+    
+    <div class="rec-card">
+        <div class="rec-title">3. Cross-Sell High-Margin Beauty & Tech Accessories</div>
+        <div class="insight-body">
+            <b>Finding:</b> Beauty & Personal Care delivers 67% margins compared to 47% in Electronics.<br>
+            <b>Action:</b> Deploy automated recommendation carousels at checkout pairing flagship electronics with high-margin skincare, chargers, and accessories.
+        </div>
+    </div>
+    
+    <div class="rec-card">
+        <div class="rec-title">4. Targeted Regional Marketing in Central Territory</div>
+        <div class="insight-body">
+            <b>Finding:</b> Central region contributes only 9.1% of company sales.<br>
+            <b>Action:</b> Reallocate 15% of underperforming ad spend toward localized digital campaigns and regional fulfillment in Chicago, Minneapolis, and St. Louis.
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# -------------------------------------------------------------
+# TAB 9: TARGET PROFIT SCENARIO (+15%)
+# -------------------------------------------------------------
+with tab_target:
+    st.markdown('<div class="section-header">Profit Improvement Target & Scenario Modeling</div>', unsafe_allow_html=True)
+    st.markdown("""
+    **Business Objective:** Quantify strategic levers to work toward improving overall profit margin by **15% relative** (e.g., from baseline to target margin).
     """)
     
-    target_margin_pct = prof_margin * 1.15
-    target_abs_gain = target_margin_pct - prof_margin
+    base_margin = kpi_margin
+    target_margin = base_margin * 1.15
+    abs_gain = target_margin - base_margin
     
-    sim_c1, sim_c2 = st.columns(2)
-    with sim_c1:
-        st.metric(
-            label="Current Baseline Profit Margin",
-            value=f"{prof_margin:.2f}%",
-            delta=None
-        )
-    with sim_c2:
-        st.metric(
-            label="Target Profit Margin (+15% Relative Gain)",
-            value=f"{target_margin_pct:.2f}%",
-            delta=f"+{target_abs_gain:.2f}% absolute margin target",
-            delta_color="normal"
-        )
+    t_c1, t_c2 = st.columns(2)
+    t_c1.metric("Current Baseline Profit Margin", f"{base_margin:.2f}%")
+    t_c2.metric("Target Profit Margin (+15% Relative)", f"{target_margin:.2f}%", f"+{abs_gain:.2f}% absolute margin required")
+    
+    st.markdown("---")
+    st.markdown("#### 🛠️ Hypothetical Scenario Simulator (Interactive Levers)")
+    st.caption("Adjust operational parameters below to model simulated outcomes:")
+    
+    s1, s2 = st.columns(2)
+    with s1:
+        slider_disc = st.slider("Discount Discipline (% Reduction in Average Discount)", 0.0, 5.0, 2.0, 0.5)
+    with s2:
+        slider_cogs = st.slider("COGS Procurement Efficiency (% Reduction in Supplier Cost)", 0.0, 5.0, 2.5, 0.5)
         
-    st.markdown("#### Strategic Scenario Modeling Levers")
-    st.markdown("Adjust parameters below to test feasibility under hypothetical operational optimizations:")
+    sim_rev = kpi_revenue * (1 + (slider_disc / 100.0) * 0.8)
+    sim_cogs = (kpi_revenue - kpi_profit) * (1 - (slider_cogs / 100.0))
+    sim_prof = sim_rev - sim_cogs
+    sim_marg = (sim_prof / sim_rev * 100) if sim_rev > 0 else 0
     
-    s_col1, s_col2 = st.columns(2)
-    with s_col1:
-        sim_discount_reduction = st.slider(
-            "Discount Policy Discipline (% Reduction in Average Discount Rate)",
-            min_value=0.0, max_value=5.0, value=2.0, step=0.5,
-            help="Simulates eliminating excessive markdowns and tightening discount rules."
-        )
-    with s_col2:
-        sim_cost_opt = st.slider(
-            "Procurement & Supply Chain Efficiency (% Reduction in Unit COGS)",
-            min_value=0.0, max_value=5.0, value=2.5, step=0.5,
-            help="Simulates renegotiated vendor volume rates and freight optimization."
-        )
-        
-    # Calculate Simulated Financials
-    # If discount is reduced by X percentage points, sales revenue increases:
-    avg_disc_current = filtered_df["Discount_Percentage"].mean()
-    effective_disc = max(0.0, avg_disc_current - (sim_discount_reduction / 100.0))
+    sr1, sr2, sr3 = st.columns(3)
+    sr1.metric("Simulated Revenue", f"${sim_rev:,.0f}", f"+${sim_rev - kpi_revenue:,.0f}")
+    sr2.metric("Simulated Profit", f"${sim_prof:,.0f}", f"+${sim_prof - kpi_profit:,.0f}")
+    sr3.metric("Simulated Profit Margin", f"{sim_marg:.2f}%", f"{sim_marg - base_margin:+.2f}% vs Base")
     
-    sim_revenue = tot_rev * (1 + (sim_discount_reduction / 100.0) * 0.8)
-    sim_cogs = (tot_rev - tot_prof) * (1 - (sim_cost_opt / 100.0))
-    sim_profit = sim_revenue - sim_cogs
-    sim_margin = (sim_profit / sim_revenue * 100) if sim_revenue > 0 else 0
-    
-    st.markdown("##### Simulated Outcome Results")
-    res_c1, res_c2, res_c3 = st.columns(3)
-    res_c1.metric("Simulated Revenue", f"${sim_revenue:,.0f}", f"+${sim_revenue - tot_rev:,.0f}")
-    res_c2.metric("Simulated Profit", f"${sim_profit:,.0f}", f"+${sim_profit - tot_prof:,.0f}")
-    res_c3.metric("Simulated Profit Margin", f"{sim_margin:.2f}%", f"{sim_margin - prof_margin:+.2f}% vs Base")
-    
-    if sim_margin >= target_margin_pct:
-        st.success(f"✅ **Target Achieved!** Combined strategic levers achieve a {sim_margin:.2f}% profit margin, meeting and surpassing the +15% target.")
+    if sim_marg >= target_margin:
+        st.success(f"✅ **Target Achieved!** Combined operational levers yield a **{sim_marg:.2f}%** profit margin, successfully meeting and exceeding the +15% target.")
     else:
-        gap = target_margin_pct - sim_margin
-        st.info(f"ℹ️ **Scenario Progress:** Current scenario achieves {sim_margin:.2f}% margin (gap of {gap:.2f}% to reach target). Additional product mix shifting is recommended.")
+        gap = target_margin - sim_marg
+        st.info(f"ℹ️ **Scenario Progress:** Current levers achieve **{sim_marg:.2f}%** margin (remaining gap: {gap:.2f}% to target). Consider combining with product mix shifts.")
+
+# -------------------------------------------------------------
+# TAB 10: DATA EXPLORER & DOWNLOADS
+# -------------------------------------------------------------
+with tab_data:
+    st.markdown('<div class="section-header">Explore Transaction Data & Export Reports</div>', unsafe_allow_html=True)
+    
+    preview_cols = ["Order_ID", "Order_Date", "Customer_ID", "Product_Category", "Sub_Category", "Product_Name", "Quantity", "Sales_Amount", "Profit", "Profit_Margin", "Region", "Order_Status"]
+    st.dataframe(df_filtered[preview_cols].head(500), use_container_width=True)
+    st.caption(f"Displaying first 500 of {len(df_filtered):,} filtered transactions.")
+    
+    st.markdown("##### 📥 Export Summaries (CSV Format)")
+    d_col1, d_col2, d_col3, d_col4, d_col5 = st.columns(5)
+    
+    # Download 1: Filtered Transactions
+    csv_filtered = df_filtered.to_csv(index=False).encode('utf-8')
+    d_col1.download_button("📥 Filtered Data (CSV)", data=csv_filtered, file_name="filtered_transactions.csv", mime="text/csv")
+    
+    # Download 2: Customer Summary
+    csv_cust = cust_df.to_csv(index=False).encode('utf-8')
+    d_col2.download_button("📥 Customer Summary (CSV)", data=csv_cust, file_name="customer_summary.csv", mime="text/csv")
+    
+    # Download 3: Category Summary
+    csv_cat = cat_metrics.to_csv(index=False).encode('utf-8')
+    d_col3.download_button("📥 Category Summary (CSV)", data=csv_cat, file_name="category_summary.csv", mime="text/csv")
+    
+    # Download 4: Regional Summary
+    csv_reg = reg_metrics.to_csv(index=False).encode('utf-8')
+    d_col4.download_button("📥 Regional Summary (CSV)", data=csv_reg, file_name="regional_summary.csv", mime="text/csv")
+    
+    # Download 5: Monthly Summary
+    csv_month = monthly_trend.to_csv(index=False).encode('utf-8')
+    d_col5.download_button("📥 Monthly Summary (CSV)", data=csv_month, file_name="monthly_summary.csv", mime="text/csv")
 
 st.sidebar.markdown("---")
-st.sidebar.caption("E-Commerce Analytics Project | Antigravity AI")
+st.sidebar.caption("E-Commerce Sales Analytics Portfolio Project | Jaya Surya S")
