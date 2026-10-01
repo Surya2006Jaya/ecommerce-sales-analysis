@@ -1,0 +1,397 @@
+"""
+Script to create the complete, professional Jupyter Notebook ecommerce_analysis.ipynb
+"""
+
+import json
+import os
+
+def build_notebook():
+    nb = {
+        "cells": [
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "# E-Commerce Sales Performance & Customer Behavior Analysis\n",
+                    "## Comprehensive End-to-End Data Analytics Portfolio Project\n",
+                    "**Author:** Data Analytics Intern / AI & Data Science Candidate  \n",
+                    "**Tools Used:** Python (Pandas, NumPy, Matplotlib, Seaborn), SQL (SQLite), Streamlit, Plotly  \n",
+                    "**Domain:** Retail & E-Commerce Business Intelligence  \n",
+                    "\n",
+                    "---\n",
+                    "\n",
+                    "### 📋 Executive Business Context & Problem Statement\n",
+                    "An established multi-category online retail platform experiences consistent daily user traffic but faces **stagnant revenue and decelerating quarterly profit margins**.\n",
+                    "\n",
+                    "**Key Management Inquiries:**\n",
+                    "1. Which product categories drive the highest revenue versus highest net profit?\n",
+                    "2. Which product lines suffer from margin leakage due to excessive promotional discounting?\n",
+                    "3. How do monthly and quarterly sales cycles fluctuate across seasonal peaks?\n",
+                    "4. Who are the highest-value customer cohorts, and what are their retention patterns?\n",
+                    "5. What concrete, data-backed operational levers can realistically bridge the gap toward a **+15% improvement in profit margin**?\n"
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 1. Environment Setup & Library Imports"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 1,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "import os\n",
+                    "import sqlite3\n",
+                    "import numpy as np\n",
+                    "import pandas as pd\n",
+                    "import matplotlib.pyplot as plt\n",
+                    "import matplotlib.ticker as ticker\n",
+                    "import warnings\n",
+                    "warnings.filterwarnings('ignore')\n",
+                    "\n",
+                    "# Set visualization aesthetics\n",
+                    "plt.style.use('seaborn-v0_8-whitegrid' if 'seaborn-v0_8-whitegrid' in plt.style.available else 'default')\n",
+                    "plt.rcParams['font.family'] = 'sans-serif'\n",
+                    "plt.rcParams['figure.dpi'] = 120\n",
+                    "\n",
+                    "print(\"Environment initialized successfully.\")"
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 2. Data Ingestion & Initial Health Audit\n",
+                    "We ingest the raw sales dataset and perform an initial structural audit to identify missing records, duplicates, and anomalies."
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 2,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Load raw transactional dataset\n",
+                    "raw_path = '../data/raw/ecommerce_sales_raw.csv' if os.path.exists('../data/raw/ecommerce_sales_raw.csv') else 'data/raw/ecommerce_sales_raw.csv'\n",
+                    "df_raw = pd.read_csv(raw_path)\n",
+                    "\n",
+                    "print(f\"Raw Dataset Dimensions: {df_raw.shape[0]:,} Rows | {df_raw.shape[1]} Columns\")\n",
+                    "df_raw.head()"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 3,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# Data quality inspection\n",
+                    "print(\"--- Data Types & Non-Null Counts ---\")\n",
+                    "print(df_raw.info())\n",
+                    "\n",
+                    "print(\"\\n--- Missing Values Audit ---\")\n",
+                    "missing = df_raw.isnull().sum()\n",
+                    "print(missing[missing > 0])\n",
+                    "\n",
+                    "print(f\"\\n--- Duplicate Records Audit ---\\nExact Duplicate Rows: {df_raw.duplicated().sum()}\")"
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 3. Systematic Data Cleaning & Transformation\n",
+                    "Every cleaning step is rigorously executed and audited:\n",
+                    "1. Deduplication\n",
+                    "2. Text normalization and trimming\n",
+                    "3. Domain-guided missing value imputation\n",
+                    "4. Outlier & negative quantity elimination\n",
+                    "5. Standardized formula recalculation for financial integrity"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 4,
+                "metadata": {},
+                "outputs": [],
+                "source": [
+                    "# 1. Deduplicate\n",
+                    "df_clean = df_raw.drop_duplicates().copy()\n",
+                    "\n",
+                    "# 2. Standardize column names\n",
+                    "df_clean.columns = [c.strip().replace(' ', '_') for c in df_clean.columns]\n",
+                    "\n",
+                    "# 3. Standardize text strings\n",
+                    "cat_cols = [\"Product_Category\", \"Sub_Category\", \"Product_Name\", \"Customer_Location\", \"Region\", \"Payment_Method\", \"Order_Status\"]\n",
+                    "for col in cat_cols:\n",
+                    "    if col in df_clean.columns:\n",
+                    "        df_clean[col] = df_clean[col].astype(str).str.strip().str.title()\n",
+                    "        df_clean[col] = df_clean[col].replace('Nan', np.nan)\n",
+                    "\n",
+                    "# 4. Missing value imputation\n",
+                    "df_clean[\"Discount_Percentage\"] = df_clean[\"Discount_Percentage\"].fillna(0.0)\n",
+                    "df_clean[\"Order_Status\"] = df_clean[\"Order_Status\"].fillna(\"Delivered\")\n",
+                    "df_clean[\"Payment_Method\"] = df_clean[\"Payment_Method\"].fillna(\"Credit Card\")\n",
+                    "loc_map = df_clean.dropna(subset=[\"Customer_Location\"]).groupby(\"Customer_ID\")[\"Customer_Location\"].first().to_dict()\n",
+                    "df_clean[\"Customer_Location\"] = df_clean[\"Customer_Location\"].fillna(df_clean[\"Customer_ID\"].map(loc_map)).fillna(\"Chicago\")\n",
+                    "\n",
+                    "# 5. Discount range correction (>1.0 indicates whole percentage)\n",
+                    "disc_mask = df_clean[\"Discount_Percentage\"] > 1.0\n",
+                    "df_clean.loc[disc_mask, \"Discount_Percentage\"] = df_clean.loc[disc_mask, \"Discount_Percentage\"] / 100.0\n",
+                    "\n",
+                    "# 6. Remove invalid quantities\n",
+                    "df_clean = df_clean[(df_clean[\"Quantity\"] > 0) & (df_clean[\"Quantity\"] <= 50)].copy()\n",
+                    "\n",
+                    "# 7. Convert Order_Date\n",
+                    "df_clean[\"Order_Date\"] = pd.to_datetime(df_clean[\"Order_Date\"])\n",
+                    "\n",
+                    "# 8. Financial formula recalculation\n",
+                    "cost_defaults = {\"Electronics\": 0.52, \"Home & Kitchen\": 0.55, \"Fashion & Apparel\": 0.38, \"Beauty & Personal Care\": 0.32, \"Sports & Outdoors\": 0.46}\n",
+                    "df_clean[\"Sales_Amount\"] = (df_clean[\"Quantity\"] * df_clean[\"Unit_Price\"] * (1 - df_clean[\"Discount_Percentage\"])).round(2)\n",
+                    "\n",
+                    "invalid_cost = (df_clean[\"Cost_Amount\"] <= 0) | (df_clean[\"Cost_Amount\"] > df_clean[\"Quantity\"] * df_clean[\"Unit_Price\"] * 1.5)\n",
+                    "for cat, ratio in cost_defaults.items():\n",
+                    "    m = invalid_cost & (df_clean[\"Product_Category\"] == cat)\n",
+                    "    df_clean.loc[m, \"Cost_Amount\"] = (df_clean.loc[m, \"Quantity\"] * df_clean.loc[m, \"Unit_Price\"] * ratio).round(2)\n",
+                    "\n",
+                    "df_clean[\"Profit\"] = (df_clean[\"Sales_Amount\"] - df_clean[\"Cost_Amount\"]).round(2)\n",
+                    "df_clean[\"Profit_Margin\"] = ((df_clean[\"Profit\"] / df_clean[\"Sales_Amount\"]) * 100).round(2)\n",
+                    "\n",
+                    "print(f\"Cleaning Complete: {len(df_clean):,} validated records retained.\")"
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 4. Feature Engineering & Customer Profiling\n",
+                    "We extract temporal attributes and build customer-level metrics for behavior segmentation."
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 5,
+                "metadata": {},
+                "source": [
+                    "# Temporal feature extraction\n",
+                    "df_clean[\"Year\"] = df_clean[\"Order_Date\"].dt.year\n",
+                    "df_clean[\"Month\"] = df_clean[\"Order_Date\"].dt.month\n",
+                    "df_clean[\"Month_Name\"] = df_clean[\"Order_Date\"].dt.strftime(\"%b\")\n",
+                    "df_clean[\"Quarter\"] = \"Q\" + df_clean[\"Order_Date\"].dt.quarter.astype(str)\n",
+                    "df_clean[\"Year_Month\"] = df_clean[\"Order_Date\"].dt.strftime(\"%Y-%m\")\n",
+                    "df_clean[\"Day_of_Week\"] = df_clean[\"Order_Date\"].dt.dayofweek\n",
+                    "df_clean[\"Weekday_Name\"] = df_clean[\"Order_Date\"].dt.strftime(\"%A\")\n",
+                    "\n",
+                    "# Discount Band assignment\n",
+                    "def get_band(d):\n",
+                    "    if d == 0: return \"0% (No Discount)\"\n",
+                    "    elif d <= 0.10: return \"1% - 10%\"\n",
+                    "    elif d <= 0.20: return \"11% - 20%\"\n",
+                    "    else: return \"> 20%\"\n",
+                    "df_clean[\"Discount_Band\"] = df_clean[\"Discount_Percentage\"].apply(get_band)\n",
+                    "\n",
+                    "# Customer-level aggregation & RFM Quantile Segmentation\n",
+                    "cust_summary = df_clean.groupby(\"Customer_ID\").agg(\n",
+                    "    Total_Orders=(\"Order_ID\", \"count\"),\n",
+                    "    Total_Revenue=(\"Sales_Amount\", \"sum\"),\n",
+                    "    Total_Profit=(\"Profit\", \"sum\"),\n",
+                    "    Average_Order_Value=(\"Sales_Amount\", \"mean\"),\n",
+                    "    Average_Discount=(\"Discount_Percentage\", \"mean\"),\n",
+                    "    First_Order_Date=(\"Order_Date\", \"min\"),\n",
+                    "    Last_Order_Date=(\"Order_Date\", \"max\"),\n",
+                    "    Customer_Location=(\"Customer_Location\", \"first\"),\n",
+                    "    Region=(\"Region\", \"first\")\n",
+                    ").reset_index()\n",
+                    "\n",
+                    "q80 = cust_summary[\"Total_Revenue\"].quantile(0.80)\n",
+                    "q30 = cust_summary[\"Total_Revenue\"].quantile(0.30)\n",
+                    "\n",
+                    "def segment_cust(rev):\n",
+                    "    if rev >= q80: return \"High Value\"\n",
+                    "    elif rev >= q30: return \"Medium Value\"\n",
+                    "    else: return \"Low Value\"\n",
+                    "\n",
+                    "cust_summary[\"Customer_Segment\"] = cust_summary[\"Total_Revenue\"].apply(segment_cust)\n",
+                    "cust_summary[\"Customer_Type\"] = cust_summary[\"Total_Orders\"].apply(lambda x: \"Repeat Customer\" if x > 1 else \"One-Time Customer\")\n",
+                    "\n",
+                    "df_clean[\"Customer_Segment\"] = df_clean[\"Customer_ID\"].map(cust_summary.set_index(\"Customer_ID\")[\"Customer_Segment\"])\n",
+                    "print(f\"Engineered Features and segmented {len(cust_summary):,} unique customers.\")"
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 5. SQL Analytics Database Integration\n",
+                    "We ingest the clean dataset into an in-memory / file SQLite database and execute production-grade analytical SQL queries."
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 6,
+                "metadata": {},
+                "source": [
+                    "conn = sqlite3.connect(':memory:')\n",
+                    "df_clean.to_sql('sales_transactions', conn, index=False)\n",
+                    "cust_summary.to_sql('customer_profiles', conn, index=False)\n",
+                    "\n",
+                    "# Query: Core Executive KPIs\n",
+                    "kpi_sql = \"\"\"\n",
+                    "SELECT \n",
+                    "    ROUND(SUM(Sales_Amount), 2) AS Total_Revenue,\n",
+                    "    ROUND(SUM(Profit), 2) AS Total_Profit,\n",
+                    "    ROUND(SUM(Profit) / SUM(Sales_Amount) * 100, 2) AS Overall_Profit_Margin_Pct,\n",
+                    "    COUNT(DISTINCT Order_ID) AS Total_Orders,\n",
+                    "    COUNT(DISTINCT Customer_ID) AS Total_Customers,\n",
+                    "    ROUND(AVG(Sales_Amount), 2) AS Avg_Order_Value\n",
+                    "FROM sales_transactions;\n",
+                    "\"\"\"\n",
+                    "pd.read_sql_query(kpi_sql, conn)"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 7,
+                "metadata": {},
+                "source": [
+                    "# Query: Category Financial Performance Breakdown\n",
+                    "cat_sql = \"\"\"\n",
+                    "SELECT \n",
+                    "    Product_Category,\n",
+                    "    COUNT(DISTINCT Order_ID) AS Order_Count,\n",
+                    "    SUM(Quantity) AS Total_Units,\n",
+                    "    ROUND(SUM(Sales_Amount), 2) AS Total_Revenue,\n",
+                    "    ROUND(SUM(Profit), 2) AS Total_Profit,\n",
+                    "    ROUND(SUM(Profit) / SUM(Sales_Amount) * 100, 2) AS Margin_Pct\n",
+                    "FROM sales_transactions\n",
+                    "GROUP BY Product_Category\n",
+                    "ORDER BY Total_Revenue DESC;\n",
+                    "\"\"\"\n",
+                    "pd.read_sql_query(cat_sql, conn)"
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 6. Exploratory Visual Analytics\n",
+                    "Generating executive-ready charts across Revenue Trends, Category Performance, Customer Segments, and Pareto distributions."
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 8,
+                "metadata": {},
+                "source": [
+                    "# Visualization: Monthly Trends\n",
+                    "monthly_agg = df_clean.groupby(\"Year_Month\").agg({\"Sales_Amount\": \"sum\", \"Profit\": \"sum\"}).reset_index()\n",
+                    "\n",
+                    "plt.figure(figsize=(11, 5))\n",
+                    "plt.plot(monthly_agg[\"Year_Month\"], monthly_agg[\"Sales_Amount\"], marker='o', color='#1E88E5', linewidth=2.5, label='Gross Revenue ($)')\n",
+                    "plt.plot(monthly_agg[\"Year_Month\"], monthly_agg[\"Profit\"], marker='s', color='#2E7D32', linewidth=2.5, label='Gross Profit ($)')\n",
+                    "plt.title(\"Monthly Sales & Profit Performance (2025)\", fontsize=13, fontweight='bold', pad=12)\n",
+                    "plt.xlabel(\"Year-Month\", fontsize=10)\n",
+                    "plt.ylabel(\"Amount ($)\", fontsize=10)\n",
+                    "plt.xticks(rotation=45)\n",
+                    "plt.gca().yaxis.set_major_formatter('${x:,.0f}')\n",
+                    "plt.legend()\n",
+                    "plt.tight_layout()\n",
+                    "plt.show()"
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 9,
+                "metadata": {},
+                "source": [
+                    "# Visualization: 80/20 Pareto Profit Contribution by Category\n",
+                    "cat_pareto = df_clean.groupby(\"Product_Category\")[\"Profit\"].sum().reset_index().sort_values(\"Profit\", ascending=False)\n",
+                    "cat_pareto[\"Cum_Profit_Pct\"] = (cat_pareto[\"Profit\"].cumsum() / cat_pareto[\"Profit\"].sum()) * 100\n",
+                    "\n",
+                    "fig, ax1 = plt.subplots(figsize=(10, 5))\n",
+                    "ax2 = ax1.twinx()\n",
+                    "ax1.bar(cat_pareto[\"Product_Category\"], cat_pareto[\"Profit\"], color='#1565C0', alpha=0.85)\n",
+                    "ax2.plot(cat_pareto[\"Product_Category\"], cat_pareto[\"Cum_Profit_Pct\"], color='#D32F2F', marker='D', linewidth=2.5)\n",
+                    "ax2.axhline(80, color='grey', linestyle='--', linewidth=1.2)\n",
+                    "ax1.set_ylabel(\"Profit ($)\", color='#1565C0')\n",
+                    "ax2.set_ylabel(\"Cumulative Profit (%)\", color='#D32F2F')\n",
+                    "ax1.set_title(\"Pareto Profit Analysis by Category\", fontsize=13, fontweight='bold')\n",
+                    "plt.xticks(rotation=20, ha='right')\n",
+                    "plt.show()"
+                ]
+            },
+            {
+                "cell_type": "markdown",
+                "metadata": {},
+                "source": [
+                    "## 7. Target Margin Scenario Modeling (+15% Objective)\n",
+                    "Evaluating feasibility of reaching the +15% quarterly profit margin objective through discount optimization and supplier renegotiation."
+                ]
+            },
+            {
+                "cell_type": "code",
+                "execution_count": 10,
+                "metadata": {},
+                "source": [
+                    "curr_margin = (df_clean[\"Profit\"].sum() / df_clean[\"Sales_Amount\"].sum()) * 100\n",
+                    "target_margin = curr_margin * 1.15\n",
+                    "\n",
+                    "print(f\"Current Baseline Profit Margin: {curr_margin:.2f}%\")\n",
+                    "print(f\"Target Profit Margin (+15% Relative Growth): {target_margin:.2f}%\")\n",
+                    "print(f\"Required Margin Improvement Gap: {target_margin - curr_margin:.2f} percentage points\\n\")\n",
+                    "\n",
+                    "# Scenario simulation\n",
+                    "def simulate_levers(discount_cut_pct=2.0, cogs_reduction_pct=2.5):\n",
+                    "    base_rev = df_clean[\"Sales_Amount\"].sum()\n",
+                    "    base_prof = df_clean[\"Profit\"].sum()\n",
+                    "    base_cogs = base_rev - base_prof\n",
+                    "    \n",
+                    "    sim_rev = base_rev * (1 + (discount_cut_pct / 100.0) * 0.8)\n",
+                    "    sim_cogs = base_cogs * (1 - (cogs_reduction_pct / 100.0))\n",
+                    "    sim_prof = sim_rev - sim_cogs\n",
+                    "    sim_margin = (sim_prof / sim_rev) * 100\n",
+                    "    \n",
+                    "    return sim_rev, sim_prof, sim_margin\n",
+                    "\n",
+                    "s_rev, s_prof, s_margin = simulate_levers(discount_cut_pct=2.0, cogs_reduction_pct=2.5)\n",
+                    "print(\"--- Scenario Model Results ---\")\n",
+                    "print(f\"Simulated Revenue: ${s_rev:,.2f}\")\n",
+                    "print(f\"Simulated Gross Profit: ${s_prof:,.2f}\")\n",
+                    "print(f\"Simulated Margin: {s_margin:.2f}%\")\n",
+                    "print(f\"Target Achieved: {s_margin >= target_margin}\")"
+                ]
+            }
+        ],
+        "metadata": {
+            "kernelspec": {
+                "display_name": "Python 3",
+                "language": "python",
+                "name": "python3"
+            },
+            "language_info": {
+                "codemirror_mode": {"name": "ipython", "version": 3},
+                "file_extension": ".py",
+                "mimetype": "text/x-python",
+                "name": "python",
+                "nbconvert_exporter": "python",
+                "pygments_lexer": "ipython3",
+                "version": "3.10"
+            }
+        },
+        "nbformat": 4,
+        "nbformat_minor": 5
+    }
+    
+    os.makedirs("ecommerce-sales-analysis/notebooks", exist_ok=True)
+    nb_path = "ecommerce-sales-analysis/notebooks/ecommerce_analysis.ipynb"
+    with open(nb_path, "w", encoding="utf-8") as f:
+        json.dump(nb, f, indent=2)
+        
+    print(f"Jupyter Notebook generated: {nb_path}")
+
+if __name__ == "__main__":
+    build_notebook()
