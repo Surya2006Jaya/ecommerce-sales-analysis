@@ -12,7 +12,11 @@ import numpy as np
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+import plotly.io as pio
 from plotly.subplots import make_subplots
+
+# Set Default Dark Theme for All Plotly Visualizations
+pio.templates.default = "plotly_dark"
 
 # -------------------------------------------------------------
 # 1. STREAMLIT CONFIGURATION & CUSTOM AESTHETICS
@@ -66,47 +70,52 @@ st.markdown("""
     .section-header {
         font-size: 1.3rem;
         font-weight: 700;
-        color: #0F172A;
-        border-bottom: 2px solid #2563EB;
+        color: #F8FAFC;
+        border-bottom: 2px solid #3B82F6;
         padding-bottom: 6px;
         margin-top: 20px;
         margin-bottom: 16px;
     }
     
-    /* Insight Callouts */
+    /* Insight Callouts (Dark Mode) */
     .insight-card {
-        background-color: #F8FAFC;
-        border-left: 4px solid #2563EB;
+        background-color: #1E293B;
+        border-left: 4px solid #3B82F6;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-left-width: 4px;
+        border-left-color: #3B82F6;
         padding: 16px;
-        border-radius: 0 8px 8px 0;
+        border-radius: 0 10px 10px 0;
         margin-bottom: 14px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
     }
     .insight-title {
         font-weight: 700;
-        color: #1E3A8A;
-        font-size: 0.98rem;
+        color: #60A5FA;
+        font-size: 1.02rem;
         margin-bottom: 6px;
     }
     .insight-body {
-        font-size: 0.9rem;
-        color: #334155;
-        line-height: 1.55;
+        font-size: 0.92rem;
+        color: #CBD5E1;
+        line-height: 1.6;
     }
     
-    /* Recommendation Card */
+    /* Recommendation Card (Dark Mode Emerald) */
     .rec-card {
-        background-color: #F0FDF4;
-        border-left: 4px solid #16A34A;
+        background-color: #064E3B;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-left-width: 4px;
+        border-left-color: #10B981;
         padding: 16px;
-        border-radius: 0 8px 8px 0;
+        border-radius: 0 10px 10px 0;
         margin-bottom: 14px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
     }
     .rec-title {
         font-weight: 700;
-        color: #15803D;
-        font-size: 0.98rem;
+        color: #6EE7B7;
+        font-size: 1.02rem;
         margin-bottom: 6px;
     }
     
